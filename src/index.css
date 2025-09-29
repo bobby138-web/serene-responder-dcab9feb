@@ -8,33 +8,53 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Wellness-focused color palette */
+    --background: 210 20% 98%;
+    --foreground: 215 25% 27%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 215 25% 27%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 215 25% 27%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Calming primary - soft teal */
+    --primary: 180 35% 45%;
+    --primary-foreground: 0 0% 98%;
+    --primary-soft: 180 45% 85%;
+    
+    /* Therapeutic secondary - gentle lavender */
+    --secondary: 250 30% 90%;
+    --secondary-foreground: 215 25% 27%;
+    
+    /* Soothing accent - warm sage */
+    --accent: 150 25% 85%;
+    --accent-foreground: 215 25% 27%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Muted wellness tones */
+    --muted: 210 15% 95%;
+    --muted-foreground: 215 15% 55%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 210 20% 90%;
+    --input: 210 20% 96%;
+    --ring: 180 35% 45%;
+    
+    /* Chat-specific colors */
+    --chat-user: 180 35% 45%;
+    --chat-user-foreground: 0 0% 98%;
+    --chat-bot: 0 0% 100%;
+    --chat-bot-foreground: 215 25% 27%;
+    
+    /* Gradients for wellness feel */
+    --gradient-wellness: linear-gradient(135deg, hsl(180 45% 85%), hsl(210 45% 88%));
+    --gradient-hero: linear-gradient(135deg, hsl(180 35% 45%), hsl(250 30% 60%));
+    
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --shadow-soft: 0 4px 20px hsl(180 35% 45% / 0.1);
 
     --radius: 0.5rem;
 
