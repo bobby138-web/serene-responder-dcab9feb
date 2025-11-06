@@ -277,13 +277,26 @@ Keep responses warm, supportive, concise, and encourage professional help when a
   };
 
   const handleSendMessage = async (content: string) => {
-    if (!currentSessionId) {
-      toast({
-        title: "Error",
-        description: "No active session",
-        variant: "destructive",
-      });
-      return;
+    // If no active session, create one
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      const { data, error } = await supabase
+        .from("chat_sessions")
+        .insert({ title: content.slice(0, 50) + (content.length > 50 ? "..." : "") })
+        .select()
+        .single();
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to create session",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      sessionId = data.id;
+      setCurrentSessionId(sessionId);
     }
 
     const userMessage: Message = {
@@ -298,7 +311,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
 
     // Save user message
     await supabase.from("chat_messages").insert({
-      session_id: currentSessionId,
+      session_id: sessionId,
       role: "user",
       content,
     });
@@ -306,7 +319,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
     // Update session title if first user message
     const userMessageCount = messages.filter(m => m.isUser).length;
     if (userMessageCount === 0) {
-      await updateSessionTitle(currentSessionId, content);
+      await updateSessionTitle(sessionId, content);
     }
 
     try {
@@ -323,7 +336,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
 
       // Save assistant message
       await supabase.from("chat_messages").insert({
-        session_id: currentSessionId,
+        session_id: sessionId,
         role: "assistant",
         content: aiResponse,
       });
