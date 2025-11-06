@@ -359,25 +359,16 @@ Keep responses warm, supportive, concise, and encourage professional help when a
 
       {/* Mobile Sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-64 p-0">
-          <ChatSidebar
-            currentSessionId={currentSessionId}
-            onSessionChange={handleSessionChange}
-            onNewChat={handleNewChat}
-          />
-        </SheetContent>
-      </Sheet>
-
-      <div className="flex flex-col flex-1">
-        {/* Header */}
-        <div className="bg-background/80 backdrop-blur-sm border-b border-border/50 p-4">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            <div className="flex items-center gap-3">
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
+        <div className="flex flex-col flex-1">
+          {/* Header */}
+          <div className="bg-background/80 backdrop-blur-sm border-b border-border/50 p-4">
+            <div className="flex items-center justify-between max-w-4xl mx-auto">
+              <div className="flex items-center gap-3">
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
               <div className="p-2 bg-primary/10 rounded-full">
                 <Heart className="h-6 w-6 text-primary" />
               </div>
@@ -420,7 +411,16 @@ Keep responses warm, supportive, concise, and encourage professional help when a
             If you're in crisis, please contact emergency services or a mental health hotline.
           </p>
         </div>
-      </div>
+
+        <SheetContent side="left" className="w-64 p-0">
+          <ChatSidebar
+            currentSessionId={currentSessionId}
+            onSessionChange={handleSessionChange}
+            onNewChat={handleNewChat}
+          />
+        </SheetContent>
+        </div>
+      </Sheet>
     </div>
   );
 };
