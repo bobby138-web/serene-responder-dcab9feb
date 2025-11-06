@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { TypingIndicator } from "./TypingIndicator";
+import { ChatSidebar } from "./ChatSidebar";
 import { Card } from "@/components/ui/card";
-import { Heart, TrendingUp } from "lucide-react";
+import { Heart, TrendingUp, Menu } from "lucide-react";
+import { Button } from "./ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,21 +28,116 @@ interface MoodEntry {
 const GROQ_API_KEY = "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";
 
 export const MentalHealthChatbot = () => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      content: "Hello! I'm your mental health companion 💙\n\nI'm here to:\n• Listen and support you\n• Help you track and reflect on your moods\n• Provide personalized insights from your journal\n• Offer wellness tips and exercises\n\nYou can talk to me naturally - just share how you're feeling or what's on your mind. How are you doing today?",
-      isUser: false,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [moodCount, setMoodCount] = useState(0);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     loadMoodCount();
+    initializeSession();
   }, []);
+
+  useEffect(() => {
+    if (currentSessionId) {
+      loadMessages(currentSessionId);
+    } else {
+      setMessages([]);
+    }
+  }, [currentSessionId]);
+
+  const initializeSession = async () => {
+    const { data, error } = await supabase
+      .from("chat_sessions")
+      .insert({ title: "New Chat" })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to initialize chat",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCurrentSessionId(data.id);
+
+    // Add welcome message
+    const welcomeMessage = {
+      session_id: data.id,
+      role: "assistant",
+      content: "Hello! I'm your mental health companion 💙\n\nI'm here to:\n• Listen and support you\n• Help you track and reflect on your moods\n• Provide personalized insights from your journal\n• Offer wellness tips and exercises\n\nYou can talk to me naturally - just share how you're feeling or what's on your mind. How are you doing today?",
+    };
+
+    await supabase.from("chat_messages").insert(welcomeMessage);
+  };
+
+  const loadMessages = async (sessionId: string) => {
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Error loading messages:", error);
+      return;
+    }
+
+    setMessages(
+      data.map((msg) => ({
+        id: msg.id,
+        content: msg.content,
+        isUser: msg.role === "user",
+        timestamp: new Date(msg.created_at),
+      }))
+    );
+  };
+
+  const handleNewChat = async () => {
+    const { data, error } = await supabase
+      .from("chat_sessions")
+      .insert({ title: "New Chat" })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error creating new chat:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create new chat",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCurrentSessionId(data.id);
+    setSidebarOpen(false);
+
+    // Add welcome message
+    const welcomeMessage = {
+      session_id: data.id,
+      role: "assistant",
+      content: "Hello! I'm your mental health companion 💙\n\nI'm here to:\n• Listen and support you\n• Help you track and reflect on your moods\n• Provide personalized insights from your journal\n• Offer wellness tips and exercises\n\nYou can talk to me naturally - just share how you're feeling or what's on your mind. How are you doing today?",
+    };
+
+    await supabase.from("chat_messages").insert(welcomeMessage);
+  };
+
+  const handleSessionChange = (sessionId: string | null) => {
+    setCurrentSessionId(sessionId);
+    setSidebarOpen(false);
+  };
+
+  const updateSessionTitle = async (sessionId: string, firstUserMessage: string) => {
+    const title = firstUserMessage.slice(0, 50) + (firstUserMessage.length > 50 ? "..." : "");
+    await supabase.from("chat_sessions").update({ title }).eq("id", sessionId);
+  };
 
   const loadMoodCount = async () => {
     const { count } = await supabase
@@ -75,7 +173,6 @@ export const MentalHealthChatbot = () => {
         return "You haven't logged any moods yet. Start sharing how you're feeling, and I'll provide personalized insights over time!";
       }
 
-      // Analyze mood patterns
       const moodCounts: Record<string, number> = {};
       data.forEach((entry: any) => {
         moodCounts[entry.mood] = (moodCounts[entry.mood] || 0) + 1;
@@ -93,7 +190,6 @@ export const MentalHealthChatbot = () => {
 
   const callGroqAPI = async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
     try {
-      // Check if user is requesting insights
       if (userMessage.toLowerCase().includes('insight') || 
           userMessage.toLowerCase().includes('pattern') || 
           userMessage.toLowerCase().includes('trend')) {
@@ -155,7 +251,6 @@ Keep responses warm, supportive, concise, and encourage professional help when a
       const data = await response.json();
       const aiResponse = data.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response right now. Please try again.";
 
-      // Parse mood logs from AI response
       const moodLogMatch = aiResponse.match(/MOOD_LOG:\s*(\w+),\s*(\d),?\s*(.*)/i);
       if (moodLogMatch) {
         const [, mood, intensity, note] = moodLogMatch;
@@ -171,7 +266,6 @@ Keep responses warm, supportive, concise, and encourage professional help when a
           description: `Recorded: ${mood} (intensity: ${intensity}/5)`,
         });
 
-        // Remove the MOOD_LOG marker from response
         return aiResponse.replace(/MOOD_LOG:.*\n?/i, '').trim();
       }
 
@@ -183,6 +277,15 @@ Keep responses warm, supportive, concise, and encourage professional help when a
   };
 
   const handleSendMessage = async (content: string) => {
+    if (!currentSessionId) {
+      toast({
+        title: "Error",
+        description: "No active session",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       content,
@@ -192,6 +295,19 @@ Keep responses warm, supportive, concise, and encourage professional help when a
 
     setMessages(prev => [...prev, userMessage]);
     setIsTyping(true);
+
+    // Save user message
+    await supabase.from("chat_messages").insert({
+      session_id: currentSessionId,
+      role: "user",
+      content,
+    });
+
+    // Update session title if first user message
+    const userMessageCount = messages.filter(m => m.isUser).length;
+    if (userMessageCount === 0) {
+      await updateSessionTitle(currentSessionId, content);
+    }
 
     try {
       const aiResponse = await callGroqAPI(content, messages);
@@ -204,6 +320,13 @@ Keep responses warm, supportive, concise, and encourage professional help when a
       };
 
       setMessages(prev => [...prev, botMessage]);
+
+      // Save assistant message
+      await supabase.from("chat_messages").insert({
+        session_id: currentSessionId,
+        role: "assistant",
+        content: aiResponse,
+      });
     } catch (error) {
       toast({
         title: "Connection Error",
@@ -224,52 +347,79 @@ Keep responses warm, supportive, concise, and encourage professional help when a
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-background via-primary-soft/20 to-accent/30">
-      {/* Header */}
-      <div className="bg-background/80 backdrop-blur-sm border-b border-border/50 p-4">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-full">
-              <Heart className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-foreground">Mental Health Companion</h1>
-              <p className="text-sm text-muted-foreground">Mood tracking & journaling</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            <span className="text-muted-foreground">{moodCount} moods logged</span>
-          </div>
-        </div>
+    <div className="flex h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block w-64 shrink-0">
+        <ChatSidebar
+          currentSessionId={currentSessionId}
+          onSessionChange={handleSessionChange}
+          onNewChat={handleNewChat}
+        />
       </div>
 
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-4xl mx-auto space-y-1">
-          {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              message={message.content}
-              isUser={message.isUser}
-              timestamp={message.timestamp}
-            />
-          ))}
-          {isTyping && <TypingIndicator />}
+      {/* Mobile Sidebar */}
+      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="w-64 p-0">
+          <ChatSidebar
+            currentSessionId={currentSessionId}
+            onSessionChange={handleSessionChange}
+            onNewChat={handleNewChat}
+          />
+        </SheetContent>
+      </Sheet>
+
+      <div className="flex flex-col flex-1">
+        {/* Header */}
+        <div className="bg-background/80 backdrop-blur-sm border-b border-border/50 p-4">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div className="flex items-center gap-3">
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="md:hidden">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <div className="p-2 bg-primary/10 rounded-full">
+                <Heart className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold text-foreground">Mental Health Companion</h1>
+                <p className="text-sm text-muted-foreground">Mood tracking & journaling</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <span className="text-muted-foreground">{moodCount} moods logged</span>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Input Area */}
-      <Card className="max-w-4xl mx-auto mb-4 mx-4 shadow-soft border-border/50 bg-background/80 backdrop-blur-sm">
-        <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
-      </Card>
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-4xl mx-auto space-y-1">
+            {messages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                message={message.content}
+                isUser={message.isUser}
+                timestamp={message.timestamp}
+              />
+            ))}
+            {isTyping && <TypingIndicator />}
+          </div>
+        </div>
 
-      {/* Disclaimer */}
-      <div className="p-4 text-center">
-        <p className="text-xs text-muted-foreground max-w-2xl mx-auto">
-          This AI is here to support you, but it's not a replacement for professional mental health care. 
-          If you're in crisis, please contact emergency services or a mental health hotline.
-        </p>
+        {/* Input Area */}
+        <Card className="max-w-4xl mx-auto mb-4 mx-4 shadow-soft border-border/50 bg-background/80 backdrop-blur-sm">
+          <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
+        </Card>
+
+        {/* Disclaimer */}
+        <div className="p-4 text-center">
+          <p className="text-xs text-muted-foreground max-w-2xl mx-auto">
+            This AI is here to support you, but it's not a replacement for professional mental health care. 
+            If you're in crisis, please contact emergency services or a mental health hotline.
+          </p>
+        </div>
       </div>
     </div>
   );
