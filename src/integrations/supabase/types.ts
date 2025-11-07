@@ -110,6 +110,7 @@ export type Database = {
           intensity: number | null
           mood: string
           note: string | null
+          session_id: string | null
         }
         Insert: {
           context?: string | null
@@ -118,6 +119,7 @@ export type Database = {
           intensity?: number | null
           mood: string
           note?: string | null
+          session_id?: string | null
         }
         Update: {
           context?: string | null
@@ -126,8 +128,17 @@ export type Database = {
           intensity?: number | null
           mood?: string
           note?: string | null
+          session_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mood_entries_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

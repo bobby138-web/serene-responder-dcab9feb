@@ -3,6 +3,8 @@ import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { TypingIndicator } from "./TypingIndicator";
 import { ChatSidebar } from "./ChatSidebar";
+import { ChatSidebar2 } from "./ChatSidebar2";
+import { MoodInput } from "./MoodInput";
 import { Card } from "@/components/ui/card";
 import { Heart, TrendingUp, Menu } from "lucide-react";
 import { Button } from "./ui/button";
@@ -33,6 +35,8 @@ export const MentalHealthChatbot = () => {
   const [moodCount, setMoodCount] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showMoodInput, setShowMoodInput] = useState(false);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -277,7 +281,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
   };
 
   const handleSendMessage = async (content: string) => {
-    // If no active session, create one
+    // If no active session, create one and show mood input
     let sessionId = currentSessionId;
     if (!sessionId) {
       const { data, error } = await supabase
@@ -296,8 +300,18 @@ Keep responses warm, supportive, concise, and encourage professional help when a
       }
 
       sessionId = data.id;
-      setCurrentSessionId(sessionId);
+      setPendingSessionId(sessionId);
+      setShowMoodInput(true);
+      
+      // Store the first message to send after mood is logged
+      sessionStorage.setItem('pendingMessage', content);
+      return;
     }
+    
+    await sendMessageToChat(sessionId, content);
+  };
+
+  const sendMessageToChat = async (sessionId: string, content: string) => {
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -363,7 +377,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
     <div className="flex h-screen bg-gradient-to-br from-background via-background to-primary/5">
       {/* Desktop Sidebar */}
       <div className="hidden md:block w-64 shrink-0">
-        <ChatSidebar
+        <ChatSidebar2
           currentSessionId={currentSessionId}
           onSessionChange={handleSessionChange}
           onNewChat={handleNewChat}
@@ -373,6 +387,35 @@ Keep responses warm, supportive, concise, and encourage professional help when a
       {/* Mobile Sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
         <div className="flex flex-col flex-1">
+          {showMoodInput && pendingSessionId && (
+            <MoodInput
+              sessionId={pendingSessionId}
+              onComplete={async () => {
+                setShowMoodInput(false);
+                setCurrentSessionId(pendingSessionId);
+                setPendingSessionId(null);
+                
+                // Send the pending message
+                const pendingMessage = sessionStorage.getItem('pendingMessage');
+                if (pendingMessage) {
+                  sessionStorage.removeItem('pendingMessage');
+                  await sendMessageToChat(pendingSessionId, pendingMessage);
+                }
+              }}
+              onSkip={async () => {
+                setShowMoodInput(false);
+                setCurrentSessionId(pendingSessionId);
+                setPendingSessionId(null);
+                
+                // Send the pending message
+                const pendingMessage = sessionStorage.getItem('pendingMessage');
+                if (pendingMessage) {
+                  sessionStorage.removeItem('pendingMessage');
+                  await sendMessageToChat(pendingSessionId, pendingMessage);
+                }
+              }}
+            />
+          )}
           {/* Header */}
           <div className="bg-background/80 backdrop-blur-sm border-b border-border/50 p-4">
             <div className="flex items-center justify-between max-w-4xl mx-auto">
@@ -426,7 +469,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
         </div>
 
         <SheetContent side="left" className="w-64 p-0">
-          <ChatSidebar
+          <ChatSidebar2
             currentSessionId={currentSessionId}
             onSessionChange={handleSessionChange}
             onNewChat={handleNewChat}
