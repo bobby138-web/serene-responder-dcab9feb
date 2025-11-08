@@ -52,18 +52,21 @@ export type Database = {
           id: string
           title: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           title?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -111,6 +114,7 @@ export type Database = {
           mood: string
           note: string | null
           session_id: string | null
+          user_id: string | null
         }
         Insert: {
           context?: string | null
@@ -120,6 +124,7 @@ export type Database = {
           mood: string
           note?: string | null
           session_id?: string | null
+          user_id?: string | null
         }
         Update: {
           context?: string | null
@@ -129,6 +134,7 @@ export type Database = {
           mood?: string
           note?: string | null
           session_id?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {

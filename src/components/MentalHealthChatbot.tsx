@@ -6,11 +6,13 @@ import { ChatSidebar } from "./ChatSidebar";
 import { ChatSidebar2 } from "./ChatSidebar2";
 import { MoodInput } from "./MoodInput";
 import { Card } from "@/components/ui/card";
-import { Heart, TrendingUp, Menu } from "lucide-react";
+import { Heart, TrendingUp, Menu, LogOut } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 interface Message {
   id: string;
@@ -26,9 +28,6 @@ interface MoodEntry {
   context?: string;
 }
 
-// Note: In a production app, this should be stored securely in environment variables
-const GROQ_API_KEY = "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";
-
 export const MentalHealthChatbot = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -38,6 +37,8 @@ export const MentalHealthChatbot = () => {
   const [showMoodInput, setShowMoodInput] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadMoodCount();
@@ -53,9 +54,11 @@ export const MentalHealthChatbot = () => {
   }, [currentSessionId]);
 
   const initializeSession = async () => {
+    if (!user) return;
+    
     const { data, error } = await supabase
       .from("chat_sessions")
-      .insert({ title: "New Chat" })
+      .insert({ title: "New Chat", user_id: user.id })
       .select()
       .single();
 
@@ -104,9 +107,11 @@ export const MentalHealthChatbot = () => {
   };
 
   const handleNewChat = async () => {
+    if (!user) return;
+    
     const { data, error } = await supabase
       .from("chat_sessions")
-      .insert({ title: "New Chat" })
+      .insert({ title: "New Chat", user_id: user.id })
       .select()
       .single();
 
@@ -151,10 +156,12 @@ export const MentalHealthChatbot = () => {
   };
 
   const saveMoodEntry = async (entry: MoodEntry) => {
+    if (!user) return;
+    
     try {
       const { error } = await supabase
         .from('mood_entries')
-        .insert([entry]);
+        .insert([{ ...entry, user_id: user.id }]);
       
       if (error) throw error;
       await loadMoodCount();
@@ -200,60 +207,16 @@ export const MentalHealthChatbot = () => {
         return await getMoodInsights();
       }
 
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json",
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: {
+          userMessage,
+          conversationHistory: conversationHistory.slice(-6),
         },
-        body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
-          messages: [
-            {
-              role: "system",
-              content: `You are a compassionate mental health journal companion and mood tracker. Your role:
-
-1. MOOD DETECTION: When users express emotions (sad, happy, anxious, stressed, calm, etc.), automatically detect and acknowledge their mood.
-
-2. REFLECTIVE QUESTIONS: Ask gentle follow-up questions like:
-   - "Would you like to share more about what happened?"
-   - "What triggered this feeling?"
-   - "How intense is this feeling on a scale of 1-5?"
-
-3. MOOD LOGGING: When a user shares a clear mood, respond with acknowledgment and save it (format: MOOD_LOG: mood_name, intensity_1-5, optional_note).
-
-4. INSIGHTS: If asked about patterns, analyze their mood history and provide personalized insights.
-
-5. WELLNESS SUPPORT: Offer:
-   - Breathing exercises for anxiety
-   - Motivational quotes for sadness
-   - Mindfulness tips for stress
-   - Celebration for positive moods
-
-6. CONVERSATIONAL: Allow natural dialogue. Users shouldn't fill forms - just talk naturally.
-
-Keep responses warm, supportive, concise, and encourage professional help when appropriate. You're not a therapist, but a supportive companion.`
-            },
-            ...conversationHistory.slice(-6).map(msg => ({
-              role: msg.isUser ? "user" : "assistant",
-              content: msg.content
-            })),
-            {
-              role: "user",
-              content: userMessage
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 500,
-        }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      if (error) throw error;
 
-      const data = await response.json();
-      const aiResponse = data.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response right now. Please try again.";
+      const aiResponse = data.response || "I'm sorry, I couldn't generate a response right now. Please try again.";
 
       const moodLogMatch = aiResponse.match(/MOOD_LOG:\s*(\w+),\s*(\d),?\s*(.*)/i);
       if (moodLogMatch) {
@@ -281,12 +244,14 @@ Keep responses warm, supportive, concise, and encourage professional help when a
   };
 
   const handleSendMessage = async (content: string) => {
+    if (!user) return;
+    
     // If no active session, create one and show mood input
     let sessionId = currentSessionId;
     if (!sessionId) {
       const { data, error } = await supabase
         .from("chat_sessions")
-        .insert({ title: content.slice(0, 50) + (content.length > 50 ? "..." : "") })
+        .insert({ title: content.slice(0, 50) + (content.length > 50 ? "..." : ""), user_id: user.id })
         .select()
         .single();
 
@@ -373,6 +338,11 @@ Keep responses warm, supportive, concise, and encourage professional help when a
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-background via-background to-primary/5">
       {/* Desktop Sidebar */}
@@ -433,9 +403,18 @@ Keep responses warm, supportive, concise, and encourage professional help when a
                 <p className="text-sm text-muted-foreground">Mood tracking & journaling</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-3 text-sm">
               <TrendingUp className="h-4 w-4 text-primary" />
               <span className="text-muted-foreground">{moodCount} moods logged</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="ml-auto"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
             </div>
           </div>
         </div>

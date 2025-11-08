@@ -1,9 +1,20 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, MessageSquare, Image, BarChart, Smile } from "lucide-react";
+import { Plus, MessageSquare, Image, BarChart, Smile, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MoodTrends } from "@/components/MoodTrends";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type View = "chats" | "library" | "analytics" | "mood";
 
@@ -22,6 +33,10 @@ interface ChatSidebar2Props {
 export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: ChatSidebar2Props) => {
   const [currentView, setCurrentView] = useState<View>("chats");
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (currentView === "chats") {
@@ -43,19 +58,97 @@ export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: C
     setSessions(data || []);
   };
 
+  const handleDeleteSession = async (sessionId: string) => {
+    const { error } = await supabase
+      .from("chat_sessions")
+      .delete()
+      .eq("id", sessionId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete chat",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Chat deleted",
+      description: "Your chat has been removed",
+    });
+
+    if (currentSessionId === sessionId) {
+      onSessionChange(null);
+    }
+
+    loadSessions();
+    setDeleteDialogOpen(false);
+    setSessionToDelete(null);
+  };
+
+  const handleDeleteAllSessions = async () => {
+    const { error } = await supabase
+      .from("chat_sessions")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000"); // Delete all
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete chats",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "All chats deleted",
+      description: "Your chat history has been cleared",
+    });
+
+    onSessionChange(null);
+    loadSessions();
+    setDeleteAllDialogOpen(false);
+  };
+
   const ChatsList = () => (
     <ScrollArea className="flex-1">
       <div className="p-2 space-y-2">
-        {sessions.map((session) => (
+        {sessions.length > 0 && (
           <Button
-            key={session.id}
-            variant={currentSessionId === session.id ? "secondary" : "ghost"}
-            className="w-full justify-start text-left"
-            onClick={() => onSessionChange(session.id)}
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeleteAllDialogOpen(true)}
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 mb-2"
           >
-            <MessageSquare className="h-4 w-4 mr-2 shrink-0" />
-            <span className="truncate">{session.title}</span>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete All Chats
           </Button>
+        )}
+        {sessions.map((session) => (
+          <div key={session.id} className="flex gap-1 group">
+            <Button
+              variant={currentSessionId === session.id ? "secondary" : "ghost"}
+              className="flex-1 justify-start text-left"
+              onClick={() => onSessionChange(session.id)}
+            >
+              <MessageSquare className="h-4 w-4 mr-2 shrink-0" />
+              <span className="truncate">{session.title}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSessionToDelete(session.id);
+                setDeleteDialogOpen(true);
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         ))}
         {sessions.length === 0 && (
           <div className="text-center py-8 text-muted-foreground text-sm">
@@ -138,6 +231,46 @@ export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: C
           </div>
         </ScrollArea>
       )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this conversation and all its messages. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => sessionToDelete && handleDeleteSession(sessionToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete all chats?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all your conversations and messages. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAllSessions}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -5,7 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { Smile, Meh, Frown, X } from "lucide-react";
+import { z } from "zod";
+
+const noteSchema = z.string().trim().max(500, { message: "Note must be less than 500 characters" });
 
 interface MoodInputProps {
   sessionId: string;
@@ -27,6 +31,7 @@ export const MoodInput = ({ sessionId, onComplete, onSkip }: MoodInputProps) => 
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleSubmit = async () => {
     if (!selectedMood) {
@@ -37,12 +42,37 @@ export const MoodInput = ({ sessionId, onComplete, onSkip }: MoodInputProps) => 
       return;
     }
 
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate note
+    try {
+      if (note) {
+        noteSchema.parse(note);
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Validation Error",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     const { error } = await supabase.from("mood_entries").insert({
       session_id: sessionId,
+      user_id: user.id,
       mood: selectedMood,
       intensity: intensity[0],
-      note: note || null,
+      note: note.trim() || null,
       context: "pre-conversation",
     });
 
@@ -127,6 +157,7 @@ export const MoodInput = ({ sessionId, onComplete, onSkip }: MoodInputProps) => 
               onChange={(e) => setNote(e.target.value)}
               placeholder="What's on your mind?"
               className="min-h-[80px] resize-none"
+              maxLength={500}
             />
           </div>
 

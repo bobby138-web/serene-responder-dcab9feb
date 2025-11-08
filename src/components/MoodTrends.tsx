@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format } from "date-fns";
 import { Smile, TrendingUp } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MoodEntry {
   id: string;
@@ -16,10 +17,13 @@ interface MoodEntry {
 export const MoodTrends = () => {
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
-    fetchMoodEntries();
-  }, []);
+    if (user) {
+      fetchMoodEntries();
+    }
+  }, [user]);
 
   const fetchMoodEntries = async () => {
     const { data, error } = await supabase
