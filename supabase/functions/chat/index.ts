@@ -13,6 +13,40 @@ serve(async (req) => {
   try {
     const { messages, userMessage, conversationHistory } = await req.json();
 
+    // Check for web search prefix
+    const isWebSearch = userMessage?.startsWith('[Web Search]');
+    let searchContext = '';
+    let processedMessage = userMessage;
+
+    if (isWebSearch) {
+      const searchQuery = userMessage.replace('[Web Search]', '').trim();
+      console.log('Performing web search:', searchQuery);
+      
+      try {
+        const searchResponse = await fetch(
+          `https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json&no_html=1&skip_disambig=1`
+        );
+        const searchData = await searchResponse.json();
+        
+        if (searchData.AbstractText) {
+          searchContext = `\n\nWeb Search Results:\n${searchData.AbstractText}`;
+        } else if (searchData.RelatedTopics?.length > 0) {
+          const topics = searchData.RelatedTopics.slice(0, 3)
+            .map((topic: any) => topic.Text)
+            .filter(Boolean)
+            .join('\n• ');
+          if (topics) {
+            searchContext = `\n\nWeb Search Results:\n• ${topics}`;
+          }
+        }
+        
+        processedMessage = `User searched for: "${searchQuery}". ${searchContext ? 'Here are the results:' + searchContext : 'No results found.'} Please provide a helpful response.`;
+      } catch (error) {
+        console.error('Web search error:', error);
+        processedMessage = `User tried to search for: "${searchQuery}". Please provide general information about this topic.`;
+      }
+    }
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY not configured');
@@ -48,9 +82,11 @@ serve(async (req) => {
    - Mindfulness tips for stress
    - Celebration for positive moods
 
-6. CONVERSATIONAL: Allow natural dialogue. Users shouldn't fill forms - just talk naturally.
+6. WEB SEARCH: When provided with web search results, incorporate them naturally into your response.
 
-Keep responses warm, supportive, concise, and encourage professional help when appropriate. You're not a therapist, but a supportive companion.`
+7. CONVERSATIONAL: Allow natural dialogue. Users shouldn't fill forms - just talk naturally.
+
+Keep responses warm, supportive, concise, and encourage professional help when appropriate. You're not a therapist, but a supportive companion.${searchContext ? '\n\n' + searchContext : ''}`
           },
           ...(conversationHistory || []).slice(-6).map((msg: any) => ({
             role: msg.isUser ? "user" : "assistant",
@@ -58,7 +94,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
           })),
           {
             role: "user",
-            content: userMessage
+            content: processedMessage || userMessage
           }
         ],
         stream: true,

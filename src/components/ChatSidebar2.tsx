@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, MessageSquare, Image, BarChart, Smile, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { MoodTrends } from "@/components/MoodTrends";
+import { FilePreviewModal } from "@/components/FilePreviewModal";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -28,11 +29,23 @@ interface ChatSidebar2Props {
   currentSessionId: string | null;
   onSessionChange: (sessionId: string | null) => void;
   onNewChat: () => void;
+  mediaRefresh?: number;
 }
 
-export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: ChatSidebar2Props) => {
+interface MediaFile {
+  id: string;
+  file_name: string;
+  file_url: string;
+  file_type: string;
+  created_at: string;
+}
+
+export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat, mediaRefresh = 0 }: ChatSidebar2Props) => {
   const [currentView, setCurrentView] = useState<View>("chats");
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
+  const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
@@ -41,8 +54,10 @@ export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: C
   useEffect(() => {
     if (currentView === "chats") {
       loadSessions();
+    } else if (currentView === "library") {
+      loadMediaFiles();
     }
-  }, [currentView]);
+  }, [currentView, mediaRefresh]);
 
   const loadSessions = async () => {
     const { data, error } = await supabase
@@ -56,6 +71,20 @@ export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: C
     }
 
     setSessions(data || []);
+  };
+
+  const loadMediaFiles = async () => {
+    const { data, error } = await supabase
+      .from("media_library")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error loading media:", error);
+      return;
+    }
+
+    setMediaFiles(data || []);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
@@ -160,9 +189,46 @@ export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: C
   );
 
   const LibraryView = () => (
-    <div className="p-4 text-center text-muted-foreground">
-      Media library coming soon...
-    </div>
+    <ScrollArea className="flex-1">
+      <div className="p-2 space-y-2">
+        {mediaFiles.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            No uploads yet
+          </div>
+        )}
+        {mediaFiles.map((file) => {
+          const isImage = file.file_type.startsWith('image/');
+          return (
+            <div
+              key={file.id}
+              className="group relative bg-muted/50 rounded-lg p-3 hover:bg-muted cursor-pointer transition-colors"
+              onClick={() => {
+                setPreviewFile(file);
+                setPreviewOpen(true);
+              }}
+            >
+              {isImage ? (
+                <div className="aspect-video rounded overflow-hidden mb-2">
+                  <img 
+                    src={file.file_url} 
+                    alt={file.file_name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mb-2">
+                  <Image className="h-8 w-8 text-muted-foreground" />
+                </div>
+              )}
+              <p className="text-xs font-medium truncate">{file.file_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(file.created_at).toLocaleDateString()}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </ScrollArea>
   );
 
   return (
@@ -231,6 +297,16 @@ export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat }: C
           </div>
         </ScrollArea>
       )}
+
+      <FilePreviewModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        file={previewFile}
+        onDelete={() => {
+          loadMediaFiles();
+          setPreviewFile(null);
+        }}
+      />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

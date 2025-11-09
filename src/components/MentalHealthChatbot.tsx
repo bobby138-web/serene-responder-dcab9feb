@@ -36,6 +36,7 @@ export const MentalHealthChatbot = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showMoodInput, setShowMoodInput] = useState(false);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [mediaRefresh, setMediaRefresh] = useState(0);
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -322,6 +323,13 @@ export const MentalHealthChatbot = () => {
     }
   };
 
+  const handleWebSearch = async (query: string) => {
+    if (!currentSessionId) return;
+    
+    // Send as a user message with web search context
+    await sendMessageToChat(currentSessionId, `[Web Search] ${query}`);
+  };
+
   const handleSendMessage = async (content: string) => {
     if (!user) return;
     
@@ -447,6 +455,7 @@ export const MentalHealthChatbot = () => {
           currentSessionId={currentSessionId}
           onSessionChange={handleSessionChange}
           onNewChat={handleNewChat}
+          mediaRefresh={mediaRefresh}
         />
       </div>
 
@@ -532,7 +541,13 @@ export const MentalHealthChatbot = () => {
 
         {/* Input Area */}
         <Card className="max-w-4xl mx-auto mb-4 mx-4 shadow-soft border-border/50 bg-background/80 backdrop-blur-sm">
-          <ChatInput onSendMessage={handleSendMessage} disabled={isTyping} />
+          <ChatInput 
+            onSendMessage={handleSendMessage} 
+            sessionId={currentSessionId}
+            disabled={isTyping}
+            onUpload={() => setMediaRefresh(prev => prev + 1)}
+            onWebSearch={handleWebSearch}
+          />
         </Card>
 
         {/* Disclaimer */}
@@ -548,6 +563,7 @@ export const MentalHealthChatbot = () => {
             currentSessionId={currentSessionId}
             onSessionChange={handleSessionChange}
             onNewChat={handleNewChat}
+            mediaRefresh={mediaRefresh}
           />
         </SheetContent>
         </div>

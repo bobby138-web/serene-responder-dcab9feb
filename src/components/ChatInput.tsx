@@ -3,13 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Mic } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { UploadMenu } from "./UploadMenu";
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
+  sessionId: string | null;
   disabled?: boolean;
+  onUpload?: () => void;
+  onWebSearch?: (query: string) => void;
 }
 
-export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
+export const ChatInput = ({ onSendMessage, sessionId, disabled, onUpload, onWebSearch }: ChatInputProps) => {
   const [message, setMessage] = useState("");
   const { isListening, transcript, startListening, stopListening, resetTranscript } = useSpeechRecognition();
 
@@ -46,6 +50,11 @@ export const ChatInput = ({ onSendMessage, disabled }: ChatInputProps) => {
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-2 p-4 bg-background border-t border-border">
+      <UploadMenu 
+        sessionId={sessionId} 
+        onUpload={onUpload}
+        onWebSearch={onWebSearch}
+      />
       <Textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
