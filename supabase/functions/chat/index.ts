@@ -13,19 +13,19 @@ serve(async (req) => {
   try {
     const { messages, userMessage, conversationHistory } = await req.json();
 
-    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
-    if (!GROQ_API_KEY) {
-      throw new Error('GROQ_API_KEY not configured');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "google/gemini-2.5-flash",
         messages: messages || [
           {
             role: "system",
@@ -68,7 +68,7 @@ Keep responses warm, supportive, concise, and encourage professional help when a
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Groq API error: ${response.status} - ${error}`);
+      throw new Error(`AI API error: ${response.status} - ${error}`);
     }
 
     const data = await response.json();
