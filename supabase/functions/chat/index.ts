@@ -61,25 +61,31 @@ Keep responses warm, supportive, concise, and encourage professional help when a
             content: userMessage
           }
         ],
-        temperature: 0.7,
-        max_tokens: 500,
+        stream: true,
       }),
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "Payment required, please add funds to your Lovable AI workspace." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const error = await response.text();
+      console.error("AI API error:", response.status, error);
       throw new Error(`AI API error: ${response.status} - ${error}`);
     }
 
-    const data = await response.json();
-    const aiResponse = data.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response right now. Please try again.";
-
-    return new Response(
-      JSON.stringify({ response: aiResponse }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return new Response(response.body, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    });
   } catch (error) {
     console.error('Error in chat function:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';

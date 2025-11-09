@@ -199,26 +199,104 @@ export const MentalHealthChatbot = () => {
     }
   };
 
-  const callGroqAPI = async (userMessage: string, conversationHistory: Message[]): Promise<string> => {
+  const streamChatResponse = async (
+    userMessage: string, 
+    conversationHistory: Message[],
+    onDelta: (deltaText: string) => void,
+    onDone: () => void
+  ) => {
     try {
       if (userMessage.toLowerCase().includes('insight') || 
           userMessage.toLowerCase().includes('pattern') || 
           userMessage.toLowerCase().includes('trend')) {
-        return await getMoodInsights();
+        const insights = await getMoodInsights();
+        onDelta(insights);
+        onDone();
+        return insights;
       }
 
-      const { data, error } = await supabase.functions.invoke('chat', {
-        body: {
-          userMessage,
-          conversationHistory: conversationHistory.slice(-6),
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
+        body: JSON.stringify({
+          userMessage,
+          conversationHistory: conversationHistory.slice(-6).map(msg => ({
+            content: msg.content,
+            isUser: msg.isUser,
+          })),
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to start stream');
+      }
 
-      const aiResponse = data.response || "I'm sorry, I couldn't generate a response right now. Please try again.";
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = '';
+      let streamDone = false;
+      let fullResponse = '';
 
-      const moodLogMatch = aiResponse.match(/MOOD_LOG:\s*(\w+),\s*(\d),?\s*(.*)/i);
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') {
+            streamDone = true;
+            break;
+          }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              fullResponse += content;
+              onDelta(content);
+            }
+          } catch {
+            textBuffer = line + '\n' + textBuffer;
+            break;
+          }
+        }
+      }
+
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (raw.startsWith(':') || raw.trim() === '') continue;
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              fullResponse += content;
+              onDelta(content);
+            }
+          } catch { }
+        }
+      }
+
+      onDone();
+
+      // Check for mood logging
+      const moodLogMatch = fullResponse.match(/MOOD_LOG:\s*(\w+),\s*(\d),?\s*(.*)/i);
       if (moodLogMatch) {
         const [, mood, intensity, note] = moodLogMatch;
         await saveMoodEntry({
@@ -233,12 +311,13 @@ export const MentalHealthChatbot = () => {
           description: `Recorded: ${mood} (intensity: ${intensity}/5)`,
         });
 
-        return aiResponse.replace(/MOOD_LOG:.*\n?/i, '').trim();
+        return fullResponse.replace(/MOOD_LOG:.*\n?/i, '').trim();
       }
 
-      return aiResponse;
+      return fullResponse;
     } catch (error) {
-      console.error("Error calling Groq API:", error);
+      console.error("Error streaming chat:", error);
+      onDone();
       throw error;
     }
   };
@@ -302,23 +381,40 @@ export const MentalHealthChatbot = () => {
     }
 
     try {
-      const aiResponse = await callGroqAPI(content, messages);
-      
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: aiResponse,
-        isUser: false,
-        timestamp: new Date(),
+      let assistantMessageId = (Date.now() + 1).toString();
+      let assistantContent = '';
+
+      const updateAssistant = (chunk: string) => {
+        assistantContent += chunk;
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.id === assistantMessageId && !last.isUser) {
+            return prev.map((m, i) => 
+              i === prev.length - 1 ? { ...m, content: assistantContent } : m
+            );
+          }
+          return [...prev, {
+            id: assistantMessageId,
+            content: assistantContent,
+            isUser: false,
+            timestamp: new Date(),
+          }];
+        });
       };
 
-      setMessages(prev => [...prev, botMessage]);
-
-      // Save assistant message
-      await supabase.from("chat_messages").insert({
-        session_id: sessionId,
-        role: "assistant",
-        content: aiResponse,
-      });
+      await streamChatResponse(
+        content,
+        messages,
+        updateAssistant,
+        async () => {
+          // Save assistant message to DB
+          await supabase.from("chat_messages").insert({
+            session_id: sessionId,
+            role: "assistant",
+            content: assistantContent,
+          });
+        }
+      );
     } catch (error) {
       toast({
         title: "Connection Error",
