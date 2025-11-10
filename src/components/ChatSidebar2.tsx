@@ -286,9 +286,33 @@ export const ChatSidebar2 = ({ currentSessionId, onSessionChange, onNewChat, med
       {currentView === "chats" && <ChatsList />}
       {currentView === "library" && <LibraryView />}
       {currentView === "analytics" && (
-        <div className="p-4 text-center text-muted-foreground">
-          Analytics coming soon...
-        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-4 space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <BarChart className="h-5 w-5" />
+                Chat Activity
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold">{sessions.length}</div>
+                  <div className="text-sm text-muted-foreground">Total Chats</div>
+                </div>
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <div className="text-2xl font-bold">{mediaFiles.length}</div>
+                  <div className="text-sm text-muted-foreground">Files Uploaded</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Smile className="h-5 w-5" />
+                Mood Analytics
+              </h3>
+              <MoodTrends />
+            </div>
+          </div>
+        </ScrollArea>
       )}
       {currentView === "mood" && (
         <ScrollArea className="flex-1">
