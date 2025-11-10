@@ -266,7 +266,32 @@ export const MentalHealthChatbot = () => {
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               fullResponse += content;
-              onDelta(content);
+              
+              // Check for mood logging and filter it out
+              if (content.includes('MOOD_LOG:')) {
+                const moodMatch = content.match(/MOOD_LOG:([^,\n]+),(\d+),?(.*)/);
+                if (moodMatch) {
+                  const [fullMatch, mood, intensityStr, note] = moodMatch;
+                  await saveMoodEntry({
+                    mood: mood.toLowerCase().trim(),
+                    intensity: parseInt(intensityStr),
+                    note: note?.trim() || undefined,
+                    context: userMessage
+                  });
+                  
+                  toast({
+                    title: "Mood Logged 📝",
+                    description: `Recorded: ${mood.trim()} (intensity: ${intensityStr}/5)`,
+                  });
+                }
+                // Send content without MOOD_LOG line
+                const cleanContent = content.replace(/MOOD_LOG:[^\n]*\n?/g, '');
+                if (cleanContent) {
+                  onDelta(cleanContent);
+                }
+              } else {
+                onDelta(content);
+              }
             }
           } catch {
             textBuffer = line + '\n' + textBuffer;
@@ -288,33 +313,18 @@ export const MentalHealthChatbot = () => {
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) {
               fullResponse += content;
-              onDelta(content);
+              
+              // Filter out MOOD_LOG from display
+              const cleanContent = content.replace(/MOOD_LOG:[^\n]*\n?/g, '');
+              if (cleanContent) {
+                onDelta(cleanContent);
+              }
             }
           } catch { }
         }
       }
 
       onDone();
-
-      // Check for mood logging
-      const moodLogMatch = fullResponse.match(/MOOD_LOG:\s*(\w+),\s*(\d),?\s*(.*)/i);
-      if (moodLogMatch) {
-        const [, mood, intensity, note] = moodLogMatch;
-        await saveMoodEntry({
-          mood: mood.toLowerCase(),
-          intensity: parseInt(intensity),
-          note: note.trim() || undefined,
-          context: userMessage
-        });
-        
-        toast({
-          title: "Mood Logged 📝",
-          description: `Recorded: ${mood} (intensity: ${intensity}/5)`,
-        });
-
-        return fullResponse.replace(/MOOD_LOG:.*\n?/i, '').trim();
-      }
-
       return fullResponse;
     } catch (error) {
       console.error("Error streaming chat:", error);
